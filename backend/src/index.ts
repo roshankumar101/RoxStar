@@ -29,27 +29,38 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.get("/api/readiness", (_req, res) => {
-  if (!isDatabaseReady()) { res.status(503).json({ ready: false, database: "disconnected" }); return; }
+  if (!isDatabaseReady()) {
+    res.status(503).json({ ready: false, database: "disconnected" });
+    return;
+  }
   res.json({ ready: true, database: "connected" });
 });
 
 const httpServer = createServer(app);
 export const io = new Server(httpServer, {
   cors: { origin: clientOrigin, credentials: true },
-  connectionStateRecovery: { maxDisconnectionDuration: 2 * 60 * 1000, skipMiddlewares: false },
+  connectionStateRecovery: {
+    maxDisconnectionDuration: 2 * 60 * 1000,
+    skipMiddlewares: false,
+  },
 });
 
 app.use("/api/auth", authRoutes);
 app.use("/api/rooms", createRoomRouter(io));
-app.use("/api", createSpinRouter(io));
 app.use("/api/users", userRoutes);
 app.use("/api/drafts", draftRoutes);
+app.use("/api", createSpinRouter(io));
 app.use(errorHandler);
 
 function socketToken(socket: Socket): string | undefined {
-  const authToken = typeof socket.handshake.auth?.token === "string" ? socket.handshake.auth.token : undefined;
+  const authToken =
+    typeof socket.handshake.auth?.token === "string"
+      ? socket.handshake.auth.token
+      : undefined;
   if (authToken) return authToken;
-  const cookie = socket.handshake.headers.cookie?.split(";").find((value) => value.trim().startsWith("roxstar_token="));
+  const cookie = socket.handshake.headers.cookie
+    ?.split(";")
+    .find((value) => value.trim().startsWith("roxstar_token="));
   return cookie?.trim().slice("roxstar_token=".length);
 }
 
@@ -62,29 +73,51 @@ io.use((socket, next) => {
     if (!payload.sub) return next(new Error("Invalid token"));
     socket.data.userId = payload.sub;
     next();
-  } catch { next(new Error("Invalid or expired token")); }
+  } catch {
+    next(new Error("Invalid or expired token"));
+  }
 });
 
 io.on("connection", (socket) => {
   const joinRoom = async (roomId: string) => {
-    const member = await RoomMember.exists({ roomId, userId: socket.data.userId, isActive: true });
-    if (!member) { socket.emit("room_error", { error: "Active room membership required" }); return; }
+    const member = await RoomMember.exists({
+      roomId,
+      userId: socket.data.userId,
+      isActive: true,
+    });
+    if (!member) {
+      socket.emit("room_error", { error: "Active room membership required" });
+      return;
+    }
     await socket.join(roomId);
-    if (!Types.ObjectId.isValid(roomId)) { socket.emit("room_error", { error: "Invalid room id" }); return; }
+    if (!Types.ObjectId.isValid(roomId)) {
+      socket.emit("room_error", { error: "Invalid room id" });
+      return;
+    }
     const state = await roomState(new Types.ObjectId(roomId));
     socket.emit("room_state", state ?? { status: "not_found" });
   };
 
-  socket.on("join_room", (roomId: string) => { void joinRoom(roomId); });
-  if (typeof socket.handshake.auth?.roomId === "string") void joinRoom(socket.handshake.auth.roomId);
+  socket.on("join_room", (roomId: string) => {
+    void joinRoom(roomId);
+  });
+  if (typeof socket.handshake.auth?.roomId === "string")
+    void joinRoom(socket.handshake.auth.roomId);
 
-  socket.on("leave_room", async (roomId: string) => { await socket.leave(roomId); });
+  socket.on("leave_room", async (roomId: string) => {
+    await socket.leave(roomId);
+  });
 });
 
 async function start(): Promise<void> {
   await connectDatabase();
   await recoverRunningSpins(io);
-  httpServer.listen(port, () => console.log(`ROXSTAR backend listening on :${port}`));
+  httpServer.listen(port, () =>
+    console.log(`ROXSTAR backend listening on :${port}`),
+  );
 }
 
-void start().catch((error) => { console.error("ROXSTAR backend failed to start", error); process.exitCode = 1; });
+void start().catch((error) => {
+  console.error("ROXSTAR backend failed to start", error);
+  process.exitCode = 1;
+});
