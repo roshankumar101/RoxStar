@@ -15,7 +15,8 @@
 #include <vector>
 
 class AudioEngine : public oboe::AudioStreamDataCallback,
-                    public oboe::AudioStreamErrorCallback {
+                    public oboe::AudioStreamErrorCallback
+{
 public:
     static AudioEngine &instance();
 

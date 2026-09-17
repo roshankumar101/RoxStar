@@ -6,68 +6,84 @@
 #include <string>
 #include <vector>
 
-class WavWriter {
+class WavWriter
+{
 public:
     ~WavWriter() { close(); }
 
-    bool open(const std::string &path, int32_t sampleRate, int32_t channelCount) {
+    bool open(const std::string &path, int32_t sampleRate, int32_t channelCount)
+    {
         close();
         path_ = path;
         sampleRate_ = sampleRate;
         channelCount_ = channelCount;
         dataBytes_ = 0;
         file_ = std::fopen(path.c_str(), "wb");
-        if (!file_) {
+        if (!file_)
+        {
             return false;
         }
         uint8_t header[44]{};
         writeHeader(header, 0);
-        if (std::fwrite(header, 1, 44, file_) != 44) {
+        if (std::fwrite(header, 1, 44, file_) != 44)
+        {
             close();
             return false;
         }
         return true;
     }
 
-    bool writeFloats(const float *samples, int32_t count) {
-        if (!file_) {
+    bool writeFloats(const float *samples, int32_t count)
+    {
+        if (!file_)
+        {
             return false;
         }
         scratch_.resize(static_cast<size_t>(count));
-        for (int32_t i = 0; i < count; ++i) {
+        for (int32_t i = 0; i < count; ++i)
+        {
             float s = samples[i];
-            if (s > 1.0f) s = 1.0f;
-            if (s < -1.0f) s = -1.0f;
+            if (s > 1.0f)
+                s = 1.0f;
+            if (s < -1.0f)
+                s = -1.0f;
             scratch_[static_cast<size_t>(i)] = static_cast<int16_t>(s * 32767.0f);
         }
         const size_t bytes = static_cast<size_t>(count) * sizeof(int16_t);
-        if (std::fwrite(scratch_.data(), 1, bytes, file_) != bytes) {
+        if (std::fwrite(scratch_.data(), 1, bytes, file_) != bytes)
+        {
             return false;
         }
         dataBytes_ += static_cast<uint32_t>(bytes);
         return true;
     }
 
-    bool finalize() {
-        if (!file_) {
+    bool finalize()
+    {
+        if (!file_)
+        {
             return false;
         }
         std::fflush(file_);
-        if (std::fseek(file_, 0, SEEK_SET) != 0) {
+        if (std::fseek(file_, 0, SEEK_SET) != 0)
+        {
             return false;
         }
         uint8_t header[44]{};
         writeHeader(header, dataBytes_);
-        if (std::fwrite(header, 1, 44, file_) != 44) {
+        if (std::fwrite(header, 1, 44, file_) != 44)
+        {
             return false;
         }
         close();
         return dataBytes_ > 0;
     }
 
-    void abort() {
+    void abort()
+    {
         close();
-        if (!path_.empty()) {
+        if (!path_.empty())
+        {
             std::remove(path_.c_str());
         }
         path_.clear();
@@ -78,14 +94,17 @@ public:
     const std::string &path() const { return path_; }
 
 private:
-    void close() {
-        if (file_) {
+    void close()
+    {
+        if (file_)
+        {
             std::fclose(file_);
             file_ = nullptr;
         }
     }
 
-    void writeHeader(uint8_t *h, uint32_t dataBytes) const {
+    void writeHeader(uint8_t *h, uint32_t dataBytes) const
+    {
         const uint32_t byteRate = static_cast<uint32_t>(sampleRate_ * channelCount_ * 2);
         const uint16_t blockAlign = static_cast<uint16_t>(channelCount_ * 2);
         const uint32_t riffSize = 36 + dataBytes;
