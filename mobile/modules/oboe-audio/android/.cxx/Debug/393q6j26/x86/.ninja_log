@@ -1,0 +1,4 @@
+# ninja log v5
+1	1628	8112417177657480	CMakeFiles/oboe-audio.dir/jni-bridge.cpp.o	76103898b75f0d83
+13	1874	8112417180137801	CMakeFiles/oboe-audio.dir/D_/RoxStar/native-audio/src/AudioEngine.cpp.o	22de50df8c6fa460
+1875	2032	8112417181824533	D:/RoxStar/mobile/modules/oboe-audio/android/build/intermediates/cxx/Debug/393q6j26/obj/x86/liboboe-audio.so	8c63dfd2791d952

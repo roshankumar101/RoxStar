@@ -1,0 +1,3 @@
+D:/RoxStar/mobile/modules/oboe-audio/android/.cxx/Debug/393q6j26/armeabi-v7a/CMakeFiles/oboe-audio.dir
+D:/RoxStar/mobile/modules/oboe-audio/android/.cxx/Debug/393q6j26/armeabi-v7a/CMakeFiles/edit_cache.dir
+D:/RoxStar/mobile/modules/oboe-audio/android/.cxx/Debug/393q6j26/armeabi-v7a/CMakeFiles/rebuild_cache.dir
