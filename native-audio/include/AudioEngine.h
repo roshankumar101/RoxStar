@@ -61,6 +61,6 @@ private:
     std::atomic<bool> recording_{false};
     std::atomic<bool> streamFailed_{false};
     std::string filePath_;
-    std::string effectName_{"echo"};
+    std::string effectName_{"original"};
     int32_t actualSampleRate_ = kRequestedSampleRate;
 };

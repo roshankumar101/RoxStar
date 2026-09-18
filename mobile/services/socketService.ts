@@ -29,14 +29,6 @@ export function leaveRoomSocket(roomId: string): void {
   if (activeRoomId === roomId) activeRoomId = null;
   socket?.emit("leave_room", roomId);
 }
-export function disconnectSocket(): void {
-  socket?.disconnect();
-  socket = null;
-  activeRoomId = null;
-}
-export function getSocket(): Socket | null {
-  return socket;
-}
 
 export type RoomEventHandlers = {
   room_state?: (state: RoomState) => void;

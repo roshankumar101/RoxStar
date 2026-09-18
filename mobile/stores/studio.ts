@@ -15,7 +15,7 @@ type StudioState = {
   drafts: Draft[];
   loading: boolean;
   error: string | null;
-  recordingPath: string | null;
+  recordingUri: string | null;
   loadDrafts: () => Promise<void>;
   start: () => Promise<void>;
   stop: (durationMs?: number) => Promise<void>;
@@ -38,7 +38,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   drafts: [],
   loading: false,
   error: null,
-  recordingPath: null,
+  recordingUri: null,
   loadDrafts: async () => {
     set({ loading: true, error: null });
     try {
@@ -56,8 +56,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       return;
     }
     try {
-      const path = await audioService.startRecording();
-      set({ recording: true, elapsedMs: 0, recordingPath: path, error: null });
+      await audioService.startRecording();
+      set({ recording: true, elapsedMs: 0, recordingUri: null, error: null });
     } catch (error) {
       set({
         error:
@@ -67,10 +67,12 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
   stop: async (durationMs) => {
     try {
-      await audioService.stopRecording();
+      const recordingUri = await audioService.stopRecording();
       set({
         recording: false,
         elapsedMs: Math.max(durationMs ?? get().elapsedMs, 1000),
+        recordingUri,
+        error: null,
       });
     } catch (error) {
       set({
@@ -80,8 +82,20 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     }
   },
   cancel: async () => {
-    await audioService.cancelRecording();
-    set({ recording: false, elapsedMs: 0, recordingPath: null });
+    try {
+      await audioService.cancelRecording();
+      set({ recording: false, elapsedMs: 0, recordingUri: null, error: null });
+    } catch (error) {
+      set({
+        recording: false,
+        elapsedMs: 0,
+        recordingUri: null,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to cancel recording",
+      });
+    }
   },
   saveDraft: async (name, effect) => {
     const duration = get().elapsedMs;
@@ -92,7 +106,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         drafts: [response.draft, ...state.drafts],
         loading: false,
         elapsedMs: 0,
-        recordingPath: null,
+        recordingUri: null,
       }));
     } catch (error) {
       set({

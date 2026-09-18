@@ -1,10 +1,9 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
-  PrimaryButton,
   Screen,
   ScreenHeader,
   SecondaryButton,
@@ -20,9 +19,9 @@ export default function RecordingScreen() {
   const start = useStudioStore((state) => state.start);
   const stop = useStudioStore((state) => state.stop);
   const cancel = useStudioStore((state) => state.cancel);
-  const saveDraft = useStudioStore((state) => state.saveDraft);
+  const recordingUri = useStudioStore((state) => state.recordingUri);
+  const error = useStudioStore((state) => state.error);
   const [elapsed, setElapsed] = useState(elapsedMs);
-  const [name, setName] = useState("");
   useEffect(() => {
     if (!recording) return undefined;
     const startedAt = Date.now() - elapsedMs;
@@ -47,6 +46,7 @@ export default function RecordingScreen() {
           router.back();
         }}
       />
+      {error ? <Text style={styles.error}>{error}</Text> : null}
       <View style={styles.center}>
         <Text style={styles.timer}>{formatDuration(displayElapsed)}</Text>
         <Text style={[styles.state, recording && styles.recording]}>
@@ -54,7 +54,14 @@ export default function RecordingScreen() {
         </Text>
         <Pressable
           accessibilityLabel={recording ? "Stop recording" : "Start recording"}
-          onPress={recording ? () => void stop(elapsed) : () => void start()}
+          onPress={
+            recording
+              ? () => void stop(elapsed)
+              : () => {
+                  setElapsed(0);
+                  void start();
+                }
+          }
           style={({ pressed }) => [
             styles.recordButton,
             recording && styles.recordingButton,
@@ -67,29 +74,18 @@ export default function RecordingScreen() {
             color="#FFFFFF"
           />
         </Pressable>
-        {isStopped ? (
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="Draft name"
-            placeholderTextColor={Palette.muted}
-            style={styles.input}
-          />
+        {isStopped && recordingUri ? (
+          <Text selectable style={styles.filePath}>
+            Saved locally: {recordingUri}
+          </Text>
         ) : null}
         <Text style={styles.note}>
-          Audio is saved locally on Android; metadata is stored in your account.
+          Recording is saved locally as a WAV file on Android.
         </Text>
       </View>
       <View style={styles.actions}>
         {isStopped ? (
-          <PrimaryButton
-            label="Save draft"
-            icon="check"
-            onPress={() => {
-              void saveDraft(name.trim() || "Voice draft", "original");
-              router.replace("/(tabs)");
-            }}
-          />
+          <SecondaryButton label="Done" onPress={() => router.back()} />
         ) : null}
         <View style={styles.actionRow}>
           <View style={styles.actionHalf}>
@@ -142,15 +138,12 @@ const styles = StyleSheet.create({
   },
   recordingButton: { backgroundColor: Palette.text },
   pressed: { opacity: 0.78 },
-  input: {
-    width: "100%",
-    height: 52,
-    borderWidth: 1,
-    borderColor: Palette.border,
-    borderRadius: 14,
-    paddingHorizontal: 15,
-    color: Palette.text,
+  filePath: {
+    color: Palette.muted,
+    fontSize: 12,
+    lineHeight: 18,
     marginTop: 24,
+    textAlign: "center",
   },
   note: {
     color: Palette.muted,
@@ -159,6 +152,12 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     maxWidth: 250,
     marginTop: 26,
+  },
+  error: {
+    color: Palette.danger,
+    fontSize: 13,
+    marginBottom: 8,
+    textAlign: "center",
   },
   actions: { gap: 10 },
   actionRow: { flexDirection: "row", gap: 10 },
