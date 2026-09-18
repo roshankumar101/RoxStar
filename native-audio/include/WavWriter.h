@@ -13,7 +13,14 @@ public:
 
     bool open(const std::string &path, int32_t sampleRate, int32_t channelCount)
     {
-        close();
+        if (!close())
+        {
+            return false;
+        }
+        if (path.empty() || sampleRate <= 0 || channelCount <= 0)
+        {
+            return false;
+        }
         path_ = path;
         sampleRate_ = sampleRate;
         channelCount_ = channelCount;
@@ -64,7 +71,10 @@ public:
         {
             return false;
         }
-        std::fflush(file_);
+        if (std::fflush(file_) != 0)
+        {
+            return false;
+        }
         if (std::fseek(file_, 0, SEEK_SET) != 0)
         {
             return false;
@@ -75,8 +85,11 @@ public:
         {
             return false;
         }
-        close();
-        return dataBytes_ > 0;
+        if (std::fflush(file_) != 0)
+        {
+            return false;
+        }
+        return close() && dataBytes_ > 0;
     }
 
     void abort()
@@ -94,13 +107,15 @@ public:
     const std::string &path() const { return path_; }
 
 private:
-    void close()
+    bool close()
     {
         if (file_)
         {
-            std::fclose(file_);
+            const int closeResult = std::fclose(file_);
             file_ = nullptr;
+            return closeResult == 0;
         }
+        return true;
     }
 
     void writeHeader(uint8_t *h, uint32_t dataBytes) const

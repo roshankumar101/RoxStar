@@ -76,6 +76,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       });
     } catch (error) {
       set({
+        recording: false,
         error:
           error instanceof Error ? error.message : "Unable to stop recording",
       });

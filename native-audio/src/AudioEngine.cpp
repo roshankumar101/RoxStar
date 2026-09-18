@@ -26,11 +26,16 @@ AudioEngine::~AudioEngine()
 std::string AudioEngine::startRecording(const std::string &filePath)
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (recording_.load())
+    if (recording_.load() || stream_)
     {
         return "already_recording";
     }
+    if (filePath.empty())
+    {
+        return "invalid_file_path";
+    }
     filePath_ = filePath;
+    finalizedPath_.clear();
     streamFailed_.store(false);
 
     const oboe::Result openResult = openStream();
@@ -50,9 +55,11 @@ std::string AudioEngine::startRecording(const std::string &filePath)
 
     if (!wavWriter_.open(filePath_, actualSampleRate_, stream_->getChannelCount()))
     {
+        LOGE("Unable to open WAV file path=%s", filePath_.c_str());
         closeStream();
         return "file_write_failed";
     }
+    LOGI("WAV file opened path=%s", filePath_.c_str());
 
     startWriterThread();
     recording_.store(true);
@@ -79,23 +86,32 @@ std::string AudioEngine::stopRecording(std::string &outPath)
     std::lock_guard<std::mutex> lock(mutex_);
     if (!recording_.load() && !stream_)
     {
+        if (!finalizedPath_.empty())
+        {
+            outPath = finalizedPath_;
+            return "";
+        }
         return "invalid_stream_state";
     }
+    LOGI("Recording stop requested");
     recording_.store(false);
     closeStream();
     stopWriterThread();
 
-    if (streamFailed_.load())
-    {
-        wavWriter_.abort();
-        return "oboe_stream_failure";
-    }
+    const uint32_t dataBytes = wavWriter_.dataBytes();
     if (!wavWriter_.finalize())
     {
         wavWriter_.abort();
-        return "empty_recording";
+        return dataBytes == 0 ? "empty_recording" : "wav_finalize_failed";
     }
     outPath = filePath_;
+    finalizedPath_ = outPath;
+    if (streamFailed_.load())
+    {
+        LOGE("Oboe stream ended with an error; finalized captured PCM");
+    }
+    LOGI("Pending PCM flushed and WAV finalized path=%s bytes=%u", outPath.c_str(), dataBytes);
+    LOGI("WAV file flushed and closed path=%s", outPath.c_str());
     LOGI("Recording stopped path=%s bytes=%u", outPath.c_str(), wavWriter_.dataBytes());
     return "";
 }
@@ -108,6 +124,8 @@ std::string AudioEngine::cancelRecording()
     stopWriterThread();
     wavWriter_.abort();
     filePath_.clear();
+    finalizedPath_.clear();
+    LOGI("Recording cancelled and incomplete WAV removed");
     return "";
 }
 
@@ -131,8 +149,12 @@ void AudioEngine::onLifecyclePause()
 {
     if (recording_.load())
     {
-        std::string unused;
-        stopRecording(unused);
+        std::string finalizedPath;
+        const std::string error = stopRecording(finalizedPath);
+        if (!error.empty())
+        {
+            LOGE("Unable to finalize recording on lifecycle pause: %s", error.c_str());
+        }
     }
 }
 
