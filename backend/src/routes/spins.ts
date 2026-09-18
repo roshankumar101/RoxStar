@@ -19,6 +19,7 @@ export function createSpinRouter(io: Server) {
       const room = await Room.findOne({
         _id: req.params.roomId,
         ownerId: userId,
+        status: "WAITING",
       });
       if (!room) {
         res.status(403).json({ error: "Only the room owner can start a spin" });
@@ -68,7 +69,7 @@ export function createSpinRouter(io: Server) {
   );
 
   router.get(
-    "/:spinId",
+    "/spins/:spinId",
     asyncHandler(async (req, res) => {
       const userId = authUserId(req);
       const spin = await Spin.findById(req.params.spinId).lean();
@@ -89,7 +90,7 @@ export function createSpinRouter(io: Server) {
   );
 
   router.get(
-    "/:spinId/result",
+    "/spins/:spinId/result",
     asyncHandler(async (req, res) => {
       const userId = authUserId(req);
       const spin = await Spin.findById(req.params.spinId).lean();

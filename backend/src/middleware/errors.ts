@@ -22,6 +22,15 @@ export function errorHandler(
   if (
     typeof error === "object" &&
     error !== null &&
+    "name" in error &&
+    error.name === "CastError"
+  ) {
+    res.status(400).json({ error: "Invalid resource id" });
+    return;
+  }
+  if (
+    typeof error === "object" &&
+    error !== null &&
     "code" in error &&
     error.code === 11000
   ) {

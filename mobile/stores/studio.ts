@@ -20,7 +20,7 @@ type StudioState = {
   start: () => Promise<void>;
   stop: (durationMs?: number) => Promise<void>;
   cancel: () => Promise<void>;
-  saveDraft: (name: string, effect: DraftEffect) => Promise<void>;
+  saveDraft: (name: string, effect: DraftEffect) => Promise<boolean>;
   deleteDraft: (id: string) => Promise<void>;
 };
 
@@ -100,20 +100,27 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
   saveDraft: async (name, effect) => {
     const duration = get().elapsedMs;
+    const fileUrl = get().recordingUri;
+    if (!fileUrl) {
+      set({ error: "Record and stop audio before saving a draft" });
+      return false;
+    }
     set({ loading: true, error: null });
     try {
-      const response = await createDraft({ name, duration, effect });
+      const response = await createDraft({ name, duration, effect, fileUrl });
       set((state) => ({
         drafts: [response.draft, ...state.drafts],
         loading: false,
         elapsedMs: 0,
         recordingUri: null,
       }));
+      return true;
     } catch (error) {
       set({
         loading: false,
         error: error instanceof Error ? error.message : "Unable to save draft",
       });
+      return false;
     }
   },
   deleteDraft: async (id) => {

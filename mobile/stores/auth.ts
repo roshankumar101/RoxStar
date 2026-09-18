@@ -6,6 +6,7 @@ import {
   logout,
   register,
 } from "@/services/authService";
+import { disconnectSocket } from "@/services/socketService";
 import type { User } from "@/types/user";
 
 type AuthState = {
@@ -61,6 +62,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       await logout();
     } finally {
+      disconnectSocket();
       set({ user: null, loading: false });
     }
   },

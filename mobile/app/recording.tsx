@@ -19,6 +19,7 @@ export default function RecordingScreen() {
   const start = useStudioStore((state) => state.start);
   const stop = useStudioStore((state) => state.stop);
   const cancel = useStudioStore((state) => state.cancel);
+  const saveDraft = useStudioStore((state) => state.saveDraft);
   const recordingUri = useStudioStore((state) => state.recordingUri);
   const error = useStudioStore((state) => state.error);
   const [elapsed, setElapsed] = useState(elapsedMs);
@@ -30,6 +31,17 @@ export default function RecordingScreen() {
   }, [recording, elapsedMs]);
   const displayElapsed = recording ? elapsed : elapsedMs;
   const isStopped = !recording && displayElapsed > 0;
+  const leave = () => {
+    if (recording) {
+      void cancel();
+    }
+    router.back();
+  };
+  const save = async () => {
+    if (await saveDraft("Voice draft", "original")) {
+      router.back();
+    }
+  };
   return (
     <Screen scroll={false}>
       <ScreenHeader
@@ -41,10 +53,7 @@ export default function RecordingScreen() {
               ? "Ready to save"
               : "Tap the microphone to begin"
         }
-        onBack={() => {
-          void cancel();
-          router.back();
-        }}
+        onBack={leave}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <View style={styles.center}>
@@ -85,7 +94,7 @@ export default function RecordingScreen() {
       </View>
       <View style={styles.actions}>
         {isStopped ? (
-          <SecondaryButton label="Done" onPress={() => router.back()} />
+          <SecondaryButton label="Done" onPress={() => void save()} />
         ) : null}
         <View style={styles.actionRow}>
           <View style={styles.actionHalf}>

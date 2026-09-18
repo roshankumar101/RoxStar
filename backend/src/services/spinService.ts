@@ -8,6 +8,18 @@ import { SpinEvent } from "../models/SpinEvent.js";
 import { SpinParticipant } from "../models/SpinParticipant.js";
 
 const timers = new Map<string, NodeJS.Timeout>();
+const eliminationsInFlight = new Set<string>();
+
+function startTimer(spinId: string, io: Server): void {
+  const timer = setInterval(() => {
+    if (eliminationsInFlight.has(spinId)) return;
+    eliminationsInFlight.add(spinId);
+    void eliminateOne(spinId, io)
+      .catch((error) => console.error(`Spin ${spinId} tick failed`, error))
+      .finally(() => eliminationsInFlight.delete(spinId));
+  }, 5000);
+  timers.set(spinId, timer);
+}
 
 async function event(
   spinId: Types.ObjectId,
@@ -44,11 +56,9 @@ export async function runAuthoritativeSpin(
     { new: true },
   );
   if (!spin) return;
+  await Room.findByIdAndUpdate(spin.roomId, { status: "ACTIVE" });
   await event(spin._id, spin.roomId, "SPIN_STARTED", io);
-  const timer = setInterval(() => {
-    void eliminateOne(spinId, io);
-  }, 5000);
-  timers.set(spinId, timer);
+  startTimer(spinId, io);
 }
 
 async function eliminateOne(spinId: string, io: Server): Promise<void> {
@@ -73,7 +83,7 @@ async function eliminateOne(spinId: string, io: Server): Promise<void> {
     spinId,
     status: "ELIMINATED",
   });
-  await SpinParticipant.updateOne(
+  const update = await SpinParticipant.updateOne(
     { _id: selected._id, status: "ACTIVE" },
     {
       status: "ELIMINATED",
@@ -81,6 +91,7 @@ async function eliminateOne(spinId: string, io: Server): Promise<void> {
       eliminationOrder: eliminatedCount + 1,
     },
   );
+  if (update.modifiedCount !== 1) return;
   await event(
     spin._id,
     spin.roomId,
@@ -110,6 +121,7 @@ async function finishSpin(
     winnerId,
     completedAt: new Date(),
   });
+  await Room.findByIdAndUpdate(spin.roomId, { status: "COMPLETED" });
   await event(spin._id, spin.roomId, "WINNER_ANNOUNCED", io, {}, winnerId);
 }
 
@@ -133,12 +145,10 @@ export async function recoverRunningSpins(io: Server): Promise<void> {
         status: "ABORTED",
         completedAt: new Date(),
       });
+      await Room.findByIdAndUpdate(spin.roomId, { status: "WAITING" });
       continue;
     }
-    const timer = setInterval(() => {
-      void eliminateOne(spin._id.toString(), io);
-    }, 5000);
-    timers.set(spin._id.toString(), timer);
+    startTimer(spin._id.toString(), io);
   }
 }
 
@@ -154,6 +164,7 @@ export async function abortSpinForRoom(roomId: Types.ObjectId): Promise<void> {
     });
     stopTimer(spin._id.toString());
   }
+  await Room.findByIdAndUpdate(roomId, { status: "WAITING" });
 }
 
 export { event };

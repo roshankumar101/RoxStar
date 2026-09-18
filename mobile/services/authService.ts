@@ -27,11 +27,16 @@ export async function login(input: {
 }
 
 export async function logout(): Promise<void> {
-  await apiRequest("/auth/logout", { method: "POST" });
-  setAccessToken(null);
+  try {
+    await apiRequest("/auth/logout", { method: "POST" });
+  } finally {
+    setAccessToken(null);
+  }
 }
 export async function getCurrentUser(): Promise<User> {
-  return (await apiRequest<{ user: User }>("/auth/me")).user;
+  const response = await apiRequest<{ user: User; token: string }>("/auth/me");
+  setAccessToken(response.token);
+  return response.user;
 }
 export async function getMyHistory(): Promise<UserHistory> {
   return apiRequest<UserHistory>("/users/me/history");

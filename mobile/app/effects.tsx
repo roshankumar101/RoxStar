@@ -22,6 +22,7 @@ export default function EffectsScreen() {
   );
   const [selectedOverride, setSelectedOverride] = useState<string | null>(null);
   const [intensity, setIntensity] = useState(1);
+  const [error, setError] = useState("");
   const selected =
     selectedOverride ??
     (draft
@@ -30,18 +31,27 @@ export default function EffectsScreen() {
         : `${draft.effect[0].toUpperCase()}${draft.effect.slice(1)}`
       : "Original");
   const save = async () => {
-    if (draft) {
-      const effect =
-        selected === "Pitch shift"
-          ? "pitch"
-          : (selected.toLowerCase() as
-              | "original"
-              | "echo"
-              | "reverb"
-              | "pitch");
-      await updateDraft(draft._id, { effect });
+    if (!draft) return;
+    const effect =
+      selected === "Pitch shift"
+        ? "pitch"
+        : (selected.toLowerCase() as
+            | "original"
+            | "echo"
+            | "reverb"
+            | "pitch");
+    setError("");
+    try {
+      const response = await updateDraft(draft._id, { effect });
+      useStudioStore.setState((state) => ({
+        drafts: state.drafts.map((item) =>
+          item._id === response.draft._id ? response.draft : item,
+        ),
+      }));
+      router.back();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to save effect");
     }
-    router.back();
   };
   return (
     <Screen>
@@ -87,6 +97,7 @@ export default function EffectsScreen() {
       <Text style={styles.helper}>
         Effect metadata is saved to your backend draft.
       </Text>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
       <View style={styles.bottom}>
         <PrimaryButton
           label="Save draft"
@@ -143,5 +154,6 @@ const styles = StyleSheet.create({
     marginLeft: -9,
   },
   helper: { color: Palette.muted, fontSize: 13, lineHeight: 20 },
+  error: { color: Palette.danger, fontSize: 13, marginTop: 14 },
   bottom: { marginTop: 40 },
 });

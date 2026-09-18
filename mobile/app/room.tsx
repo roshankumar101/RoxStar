@@ -10,6 +10,7 @@ import {
   ScreenHeader,
   SecondaryButton,
   SectionTitle,
+  formatDuration,
 } from "@/components/roxstar-ui";
 import { Palette } from "@/constants/theme";
 import { getRoom, leaveRoom } from "@/services/roomService";
@@ -42,9 +43,17 @@ export default function RoomScreen() {
   };
   useEffect(() => {
     if (!roomId) return undefined;
+    const openSpin = (spinId: string) => {
+      router.push({ pathname: "/spin", params: { roomId, spinId } });
+    };
     const reload = () => {
       void getRoom(roomId)
-        .then(setState)
+        .then((roomState) => {
+          setState(roomState);
+          if (roomState.activeSpin) {
+            openSpin(roomState.activeSpin._id);
+          }
+        })
         .catch((cause) =>
           setError(
             cause instanceof Error ? cause.message : "Unable to load room",
@@ -56,13 +65,30 @@ export default function RoomScreen() {
     if (!token) return undefined;
     connectSocket(token);
     joinRoomSocket(roomId);
-    return subscribeRoom({
+    const unsubscribe = subscribeRoom({
       room_state: setState,
       user_joined: reload,
       user_left: reload,
       draft_shared: reload,
+      spin_started: (payload) => {
+        if (typeof payload === "object" && payload && "spinId" in payload) {
+          openSpin(String(payload.spinId));
+        }
+      },
+      winner_announced: (payload) => {
+        if (typeof payload === "object" && payload && "spinId" in payload) {
+          router.replace({
+            pathname: "/winner",
+            params: { roomId, spinId: String(payload.spinId) },
+          });
+        }
+      },
     });
-  }, [roomId]);
+    return () => {
+      unsubscribe();
+      leaveRoomSocket(roomId);
+    };
+  }, [roomId, router]);
   const shareLatest = async () => {
     const draft = drafts[0];
     if (!roomId || !draft) {
@@ -75,6 +101,7 @@ export default function RoomScreen() {
         name: draft.name,
         duration: draft.duration,
         effect: draft.effect,
+        fileUrl: draft.fileUrl,
       });
       await refresh();
     } catch (cause) {
@@ -84,11 +111,15 @@ export default function RoomScreen() {
     }
   };
   const leave = async () => {
-    if (roomId) {
-      await leaveRoom(roomId);
-      leaveRoomSocket(roomId);
+    try {
+      if (roomId) {
+        await leaveRoom(roomId);
+        leaveRoomSocket(roomId);
+      }
+      router.back();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to leave room");
     }
-    router.back();
   };
   if (!state)
     return (
@@ -136,7 +167,9 @@ export default function RoomScreen() {
                 color={Palette.accent}
               />
               <Text style={styles.draftText}>{draft.name}</Text>
-              <Text style={styles.duration}>{draft.duration}s</Text>
+              <Text style={styles.duration}>
+                {formatDuration(draft.duration)}
+              </Text>
             </View>
           ))
         ) : (
@@ -150,17 +183,22 @@ export default function RoomScreen() {
           onPress={() => void shareLatest()}
         />
         <View style={styles.gap} />
-        <PrimaryButton
-          label="Start spin"
-          icon="casino"
-          onPress={() =>
-            router.push({
-              pathname: "/spin",
-              params: { roomId: state.room._id },
-            })
-          }
-        />
-        <View style={styles.gap} />
+        {String(state.room.ownerId) === currentUser?.id &&
+        state.room.status === "WAITING" ? (
+          <>
+            <PrimaryButton
+              label="Start spin"
+              icon="casino"
+              onPress={() =>
+                router.push({
+                  pathname: "/spin",
+                  params: { roomId: state.room._id },
+                })
+              }
+            />
+            <View style={styles.gap} />
+          </>
+        ) : null}
         <SecondaryButton
           label="Leave room"
           icon="exit-to-app"

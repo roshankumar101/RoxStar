@@ -80,6 +80,10 @@ io.use((socket, next) => {
 
 io.on("connection", (socket) => {
   const joinRoom = async (roomId: string) => {
+    if (!Types.ObjectId.isValid(roomId)) {
+      socket.emit("room_error", { error: "Invalid room id" });
+      return;
+    }
     const member = await RoomMember.exists({
       roomId,
       userId: socket.data.userId,
@@ -90,19 +94,19 @@ io.on("connection", (socket) => {
       return;
     }
     await socket.join(roomId);
-    if (!Types.ObjectId.isValid(roomId)) {
-      socket.emit("room_error", { error: "Invalid room id" });
-      return;
-    }
     const state = await roomState(new Types.ObjectId(roomId));
     socket.emit("room_state", state ?? { status: "not_found" });
   };
 
   socket.on("join_room", (roomId: string) => {
-    void joinRoom(roomId);
+    void joinRoom(roomId).catch(() =>
+      socket.emit("room_error", { error: "Unable to join room" }),
+    );
   });
   if (typeof socket.handshake.auth?.roomId === "string")
-    void joinRoom(socket.handshake.auth.roomId);
+    void joinRoom(socket.handshake.auth.roomId).catch(() =>
+      socket.emit("room_error", { error: "Unable to join room" }),
+    );
 
   socket.on("leave_room", async (roomId: string) => {
     await socket.leave(roomId);

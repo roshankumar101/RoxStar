@@ -81,7 +81,9 @@ router.get(
       res.status(401).json({ error: "User not found" });
       return;
     }
-    res.json({ user: publicUser(user) });
+    const token = issueToken(user._id);
+    setAuthCookie(res, token);
+    res.json({ user: publicUser(user), token });
   }),
 );
 

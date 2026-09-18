@@ -10,13 +10,17 @@ import { getSpin, startSpin } from "@/services/spinService";
 import {
   connectSocket,
   joinRoomSocket,
+  leaveRoomSocket,
   subscribeRoom,
 } from "@/services/socketService";
 import type { Spin, SpinParticipant } from "@/types/spin";
 
 export default function SpinScreen() {
   const router = useRouter();
-  const { roomId } = useLocalSearchParams<{ roomId: string }>();
+  const { roomId, spinId: initialSpinId } = useLocalSearchParams<{
+    roomId: string;
+    spinId?: string;
+  }>();
   const [rotation] = useState(() => new Animated.Value(0));
   const [spinning, setSpinning] = useState(false);
   const [spin, setSpin] = useState<Spin | null>(null);
@@ -25,33 +29,61 @@ export default function SpinScreen() {
   useEffect(() => () => rotation.stopAnimation(), [rotation]);
 
   useEffect(() => {
-    if (!roomId) return;
+    if (!initialSpinId) return;
+    void getSpin(initialSpinId)
+      .then((response) => {
+        setSpin(response.spin);
+        setParticipants(response.participants);
+        setSpinning(response.spin.status === "RUNNING");
+      })
+      .catch((cause) =>
+        setError(cause instanceof Error ? cause.message : "Unable to load spin"),
+      );
+  }, [initialSpinId]);
+
+  useEffect(() => {
+    if (!roomId) return undefined;
     const token = getAccessToken();
-    if (!token) return;
+    if (!token) return undefined;
     connectSocket(token);
     joinRoomSocket(roomId);
-    return subscribeRoom({
+    const unsubscribe = subscribeRoom({
       spin_started: (payload) => {
         const spinId =
           typeof payload === "object" && payload && "spinId" in payload
             ? String(payload.spinId)
             : "";
-        if (spinId)
-          void getSpin(spinId).then((response) => {
-            setSpin(response.spin);
-            setParticipants(response.participants);
-          });
+        if (spinId) {
+          void getSpin(spinId)
+            .then((response) => {
+              setSpin(response.spin);
+              setParticipants(response.participants);
+              setSpinning(true);
+            })
+            .catch((cause) =>
+              setError(
+                cause instanceof Error ? cause.message : "Unable to load spin",
+              ),
+            );
+        }
       },
       user_eliminated: (payload) => {
         const spinId =
           typeof payload === "object" && payload && "spinId" in payload
             ? String(payload.spinId)
-            : spin?._id;
-        if (spinId)
-          void getSpin(spinId).then((response) => {
-            setSpin(response.spin);
-            setParticipants(response.participants);
-          });
+            : "";
+        if (spinId) {
+          void getSpin(spinId)
+            .then((response) => {
+              setSpin(response.spin);
+              setParticipants(response.participants);
+            })
+            .catch((cause) =>
+              setError(
+                cause instanceof Error ? cause.message : "Unable to update spin",
+              ),
+            );
+        }
       },
       winner_announced: (payload) => {
         const spinId =
@@ -65,7 +97,11 @@ export default function SpinScreen() {
           });
       },
     });
-  }, [roomId, router, spin?._id]);
+    return () => {
+      unsubscribe();
+      leaveRoomSocket(roomId);
+    };
+  }, [roomId, router]);
 
   const beginSpin = async () => {
     if (!roomId || spinning) return;
@@ -127,11 +163,13 @@ export default function SpinScreen() {
           {spinning ? "Waiting for server events..." : "Ready"}
         </Text>
       </View>
-      <PrimaryButton
-        label="Start spin"
-        icon="refresh"
-        onPress={() => void beginSpin()}
-      />
+      {!spin && !initialSpinId ? (
+        <PrimaryButton
+          label="Start spin"
+          icon="refresh"
+          onPress={() => void beginSpin()}
+        />
+      ) : null}
     </Screen>
   );
 }

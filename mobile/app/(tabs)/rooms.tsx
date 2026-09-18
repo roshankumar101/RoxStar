@@ -33,9 +33,16 @@ export default function RoomsScreen() {
     void (async () => {
       try {
         const history = await getMyHistory();
+        const activeRoomIds = new Set(
+          history.roomsJoined
+            .filter((item) => item.isActive)
+            .map((item) => item.roomId._id),
+        );
         const all = [
-          ...history.roomsJoined.map((item) => item.roomId),
-          ...history.roomsCreated,
+          ...history.roomsJoined
+            .filter((item) => item.isActive)
+            .map((item) => item.roomId),
+          ...history.roomsCreated.filter((room) => activeRoomIds.has(room._id)),
         ];
         setRooms(
           Array.from(new Map(all.map((room) => [room._id, room])).values()),

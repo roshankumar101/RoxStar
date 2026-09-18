@@ -4,6 +4,7 @@ import type { RoomState } from "@/types/room";
 
 let socket: Socket | null = null;
 let activeRoomId: string | null = null;
+let authenticatedToken: string | null = null;
 
 export function connectSocket(token: string): Socket {
   if (!socket) {
@@ -14,10 +15,22 @@ export function connectSocket(token: string): Socket {
     });
     socket.on("connect", () => {
       if (activeRoomId) socket?.emit("join_room", activeRoomId);
+  if (socket.connected && authenticatedToken !== token) {
+    socket.disconnect();
+  }
+  authenticatedToken = token;
     });
   }
   socket.auth = { token };
   socket.connect();
+
+export function disconnectSocket(): void {
+  activeRoomId = null;
+  authenticatedToken = null;
+  socket?.disconnect();
+  socket?.removeAllListeners();
+  socket = null;
+}
   return socket;
 }
 
