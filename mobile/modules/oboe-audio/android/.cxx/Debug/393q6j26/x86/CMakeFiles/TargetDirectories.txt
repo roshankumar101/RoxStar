@@ -1,3 +1,0 @@
-D:/RoxStar/mobile/modules/oboe-audio/android/.cxx/Debug/393q6j26/x86/CMakeFiles/oboe-audio.dir
-D:/RoxStar/mobile/modules/oboe-audio/android/.cxx/Debug/393q6j26/x86/CMakeFiles/edit_cache.dir
-D:/RoxStar/mobile/modules/oboe-audio/android/.cxx/Debug/393q6j26/x86/CMakeFiles/rebuild_cache.dir
