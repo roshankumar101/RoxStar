@@ -15,14 +15,17 @@ export function connectSocket(token: string): Socket {
     });
     socket.on("connect", () => {
       if (activeRoomId) socket?.emit("join_room", activeRoomId);
+    });
+  }
   if (socket.connected && authenticatedToken !== token) {
     socket.disconnect();
   }
   authenticatedToken = token;
-    });
-  }
   socket.auth = { token };
   socket.connect();
+
+  return socket;
+}
 
 export function disconnectSocket(): void {
   activeRoomId = null;
@@ -30,8 +33,6 @@ export function disconnectSocket(): void {
   socket?.disconnect();
   socket?.removeAllListeners();
   socket = null;
-}
-  return socket;
 }
 
 export function joinRoomSocket(roomId: string): void {
