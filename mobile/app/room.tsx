@@ -75,14 +75,6 @@ export default function RoomScreen() {
           openSpin(String(payload.spinId));
         }
       },
-      winner_announced: (payload) => {
-        if (typeof payload === "object" && payload && "spinId" in payload) {
-          router.replace({
-            pathname: "/winner",
-            params: { roomId, spinId: String(payload.spinId) },
-          });
-        }
-      },
     });
     return () => {
       unsubscribe();

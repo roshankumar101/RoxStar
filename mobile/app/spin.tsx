@@ -1,6 +1,6 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 
 import {
@@ -57,6 +57,49 @@ function participantName(participant: SpinParticipant): string {
     : participant.userId.name;
 }
 
+function ParticipantList({
+  participants,
+  variant,
+}: {
+  participants: SpinParticipant[];
+  variant: "current" | "eliminated" | "winner";
+}) {
+  if (!participants.length) {
+    return <Text style={styles.emptyText}>No players to show.</Text>;
+  }
+  return (
+    <View style={styles.list}>
+      {participants.map((participant) => (
+        <View key={participant._id} style={styles.participantRow}>
+          {variant === "current" ? (
+            <View style={styles.activeDot} />
+          ) : (
+            <MaterialIcons
+              name={variant === "winner" ? "emoji-events" : "check"}
+              size={18}
+              color={
+                variant === "winner" ? Palette.accent : Palette.danger
+              }
+            />
+          )}
+          <Text
+            style={
+              variant === "current"
+                ? styles.participantName
+                : variant === "winner"
+                  ? styles.winnerRowName
+                  : styles.eliminatedName
+            }
+          >
+            {participantName(participant)}
+            {participant.status === "WITHDRAWN" ? " (left game)" : ""}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function SpinScreen() {
   const router = useRouter();
   const { roomId, spinId: initialSpinId } = useLocalSearchParams<{
@@ -64,6 +107,7 @@ export default function SpinScreen() {
     spinId?: string;
   }>();
   const currentUser = useAuthStore((state) => state.user);
+  const spinIdRef = useRef(initialSpinId ?? "");
   const [rotation] = useState(() => new Animated.Value(0));
   const [spinning, setSpinning] = useState(false);
   const [spin, setSpin] = useState<Spin | null>(null);
@@ -79,6 +123,7 @@ export default function SpinScreen() {
     if (!initialSpinId) return;
     void getSpin(initialSpinId)
       .then((response) => {
+        spinIdRef.current = response.spin._id;
         setSpin(response.spin);
         setParticipants(response.participants);
         setSpinning(response.spin.status === "RUNNING");
@@ -87,15 +132,6 @@ export default function SpinScreen() {
         setError(cause instanceof Error ? cause.message : "Unable to load spin"),
       );
   }, [initialSpinId]);
-
-  useEffect(() => {
-    if (spin?.status === "COMPLETED" && roomId) {
-      router.replace({
-        pathname: "/winner",
-        params: { spinId: spin._id, roomId },
-      });
-    }
-  }, [roomId, router, spin?._id, spin?.status]);
 
   useEffect(() => {
     if (spin?.status !== "RUNNING" || !spin.nextEliminationAt) {
@@ -116,6 +152,7 @@ export default function SpinScreen() {
     const applyRoomState = (nextState: RoomState) => {
       setRoomState(nextState);
       if (nextState.activeSpin) {
+        spinIdRef.current = nextState.activeSpin._id;
         setSpin(nextState.activeSpin);
         setParticipants(nextState.spinParticipants ?? []);
         setSpinning(nextState.activeSpin.status === "RUNNING");
@@ -124,6 +161,7 @@ export default function SpinScreen() {
     const refreshSpin = (spinId: string) => {
       void getSpin(spinId)
         .then((response) => {
+          spinIdRef.current = response.spin._id;
           setSpin(response.spin);
           setParticipants(response.participants);
           setSpinning(response.spin.status === "RUNNING");
@@ -158,12 +196,13 @@ export default function SpinScreen() {
     const unsubscribe = subscribeRoom({
       room_state: (nextState) => {
         applyRoomState(nextState);
-        if (!nextState.activeSpin && initialSpinId) {
-          refreshSpin(initialSpinId);
+        if (!nextState.activeSpin && spinIdRef.current) {
+          refreshSpin(spinIdRef.current);
         }
       },
       spin_started: (payload) => {
         const spinId = eventSpinId(payload);
+        if (spinId) spinIdRef.current = spinId;
         const snapshot = eventParticipants(payload);
         if (snapshot) setParticipants(snapshot);
         if (spinId) refreshSpin(spinId);
@@ -194,13 +233,23 @@ export default function SpinScreen() {
         animateRound();
       },
       winner_announced: (payload) => {
-        const spinId = eventSpinId(payload) || initialSpinId;
+        const data = eventPayload(payload);
+        const spinId = eventSpinId(payload) || spinIdRef.current;
         const snapshot = eventParticipants(payload);
         if (snapshot) setParticipants(snapshot);
         setSpinning(false);
-        if (spinId) {
-          router.replace({ pathname: "/winner", params: { spinId, roomId } });
-        }
+        if (spinId) spinIdRef.current = spinId;
+        setSpin((current) =>
+          current && (!spinId || current._id === spinId)
+            ? {
+                ...current,
+                status: "COMPLETED",
+                winnerId: data.userId ? String(data.userId) : current.winnerId,
+                nextEliminationAt: undefined,
+              }
+            : current,
+        );
+        if (spinId) refreshSpin(spinId);
       },
     });
     return () => {
@@ -214,6 +263,7 @@ export default function SpinScreen() {
     setError("");
     try {
       const response = await startSpin(roomId);
+      spinIdRef.current = response.spin._id;
       setSpin(response.spin);
       const current = await getSpin(response.spin._id);
       setSpin(current.spin);
@@ -236,11 +286,28 @@ export default function SpinScreen() {
   const withdrawnParticipants = participants.filter(
     (participant) => participant.status === "WITHDRAWN",
   );
+  const winnerParticipant =
+    participants.find((participant) => participant.status === "WINNER") ??
+    participants.find(
+      (participant) =>
+        spin?.winnerId && participantId(participant) === String(spin.winnerId),
+    );
+  const remainingParticipants = winnerParticipant
+    ? [winnerParticipant]
+    : activeParticipants;
+  const removedParticipants = [
+    ...eliminatedParticipants,
+    ...withdrawnParticipants,
+  ];
   const latestEliminated =
     eliminatedParticipants.find(
       (participant) => participantId(participant) === latestEliminatedId,
     ) ?? eliminatedParticipants.at(-1);
-  const currentRound = spin?.round ?? eliminatedParticipants.length + 1;
+  const currentRound =
+    spin?.status === "COMPLETED"
+      ? Math.max(1, (spin.round ?? eliminatedParticipants.length + 1) - 1)
+      : (spin?.round ?? eliminatedParticipants.length + 1);
+  const totalParticipants = participants.length;
   const spinRotation = rotation.interpolate({
     inputRange: [0, 1],
     outputRange: ["0deg", "1440deg"],
@@ -256,49 +323,20 @@ export default function SpinScreen() {
   return (
     <Screen>
       <ScreenHeader
-        title={`Round ${currentRound}`}
+        title="Spin"
         subtitle={spin ? `Status: ${spin.status}` : "Waiting to start"}
         onBack={() => router.back()}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {latestEliminated ? (
-        <View style={styles.eliminationNotice}>
-          <MaterialIcons name="person-remove" size={22} color={Palette.danger} />
-          <View style={styles.noticeCopy}>
-            <Text style={styles.noticeLabel}>ELIMINATED</Text>
-            <Text style={styles.noticeName}>
-              {participantName(latestEliminated)} has been eliminated
-            </Text>
-          </View>
-        </View>
-      ) : null}
-      <View style={styles.summaryRow}>
-        <View>
-          <Text style={styles.summaryValue}>{activeParticipants.length}</Text>
-          <Text style={styles.summaryLabel}>STILL IN GAME</Text>
-        </View>
-        <View style={styles.summaryRight}>
-          <Text style={styles.summaryValue}>{countdown}</Text>
-          <Text style={styles.summaryLabel}>SECONDS</Text>
-        </View>
-      </View>
       <View style={styles.wheelArea}>
         <Animated.View
           style={[styles.wheel, { transform: [{ rotate: spinRotation }] }]}
         >
-          {activeParticipants.slice(0, 6).map((participant, index) => (
-            <View
-              key={participant._id}
-              style={[
-                styles.wedge,
-                { top: 18 + (index % 3) * 54, left: index < 3 ? 18 : 116 },
-              ]}
-            >
-              <Text numberOfLines={1} style={styles.wedgeText}>
-                {participantName(participant)}
-              </Text>
-            </View>
-          ))}
+          <View style={styles.wheelRing} />
+          <View style={styles.wheelMarkTop} />
+          <View style={styles.wheelMarkRight} />
+          <View style={styles.wheelMarkBottom} />
+          <View style={styles.wheelMarkLeft} />
           <View style={styles.hub}>
             <MaterialIcons name="casino" size={24} color="#FFFFFF" />
           </View>
@@ -307,37 +345,60 @@ export default function SpinScreen() {
           {spinning ? "Server round in progress" : spin?.status ?? "Ready"}
         </Text>
       </View>
-      <SectionTitle>Still in game</SectionTitle>
-      <View style={styles.list}>
-        {activeParticipants.length ? (
-          activeParticipants.map((participant) => (
-            <View key={participant._id} style={styles.participantRow}>
-              <View style={styles.activeDot} />
-              <Text style={styles.participantName}>
-                {participantName(participant)}
-              </Text>
-            </View>
-          ))
-        ) : (
-          <Text style={styles.emptyText}>Waiting for participant state.</Text>
-        )}
+
+      {winnerParticipant ? (
+        <View style={styles.winnerBanner}>
+          <MaterialIcons name="emoji-events" size={32} color={Palette.accent} />
+          <Text style={styles.winnerLabel}>WINNER</Text>
+          <Text style={styles.winnerName}>
+            {participantName(winnerParticipant)}
+          </Text>
+        </View>
+      ) : null}
+
+      <View style={styles.roundSummary}>
+        <View>
+          <Text style={styles.roundLabel}>ROUND {currentRound}</Text>
+          <Text style={styles.remainingText}>
+            Players Remaining: {remainingParticipants.length}/
+            {totalParticipants || 0}
+          </Text>
+        </View>
+        {spinning ? (
+          <View style={styles.countdownBlock}>
+            <Text style={styles.countdownValue}>{countdown}</Text>
+            <Text style={styles.countdownLabel}>SECONDS</Text>
+          </View>
+        ) : null}
       </View>
-      {eliminatedParticipants.length || withdrawnParticipants.length ? (
+
+      {latestEliminated ? (
+        <View style={styles.eliminationNotice}>
+          <MaterialIcons name="person-remove" size={22} color={Palette.danger} />
+          <View style={styles.noticeCopy}>
+            <Text style={styles.noticeLabel}>LATEST ELIMINATION</Text>
+            <Text style={styles.noticeName}>
+              {participantName(latestEliminated)} was eliminated
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
+      <SectionTitle>
+        {winnerParticipant ? "Winner" : "Current players"}
+      </SectionTitle>
+      <ParticipantList
+        participants={remainingParticipants}
+        variant={winnerParticipant ? "winner" : "current"}
+      />
+
+      {removedParticipants.length ? (
         <View style={styles.eliminatedSection}>
           <SectionTitle>Eliminated</SectionTitle>
-          <View style={styles.list}>
-            {[...eliminatedParticipants, ...withdrawnParticipants].map(
-              (participant) => (
-                <View key={participant._id} style={styles.participantRow}>
-                  <MaterialIcons name="close" size={18} color={Palette.danger} />
-                  <Text style={styles.eliminatedName}>
-                    {participantName(participant)}
-                    {participant.status === "WITHDRAWN" ? " (left game)" : ""}
-                  </Text>
-                </View>
-              ),
-            )}
-          </View>
+          <ParticipantList
+            participants={removedParticipants}
+            variant="eliminated"
+          />
         </View>
       ) : null}
       {canStart ? (
@@ -355,6 +416,28 @@ export default function SpinScreen() {
 
 const styles = StyleSheet.create({
   error: { color: Palette.danger, marginBottom: 16 },
+  winnerBanner: {
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: Palette.accent,
+    backgroundColor: Palette.accentSoft,
+    paddingVertical: 22,
+    paddingHorizontal: 18,
+    marginBottom: 24,
+  },
+  winnerLabel: {
+    color: Palette.accent,
+    fontSize: 13,
+    fontWeight: "800",
+    marginTop: 8,
+  },
+  winnerName: {
+    color: Palette.text,
+    fontSize: 32,
+    fontWeight: "800",
+    marginTop: 4,
+    textAlign: "center",
+  },
   eliminationNotice: {
     minHeight: 72,
     flexDirection: "row",
@@ -373,17 +456,21 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 3,
   },
-  summaryRow: {
+  roundSummary: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     borderBottomWidth: 1,
     borderBottomColor: Palette.border,
-    paddingBottom: 16,
+    paddingBottom: 18,
+    marginBottom: 20,
   },
-  summaryRight: { alignItems: "flex-end" },
-  summaryValue: { color: Palette.text, fontSize: 28, fontWeight: "800" },
-  summaryLabel: { color: Palette.muted, fontSize: 11, fontWeight: "700" },
-  wheelArea: { alignItems: "center", paddingVertical: 30 },
+  roundLabel: { color: Palette.text, fontSize: 18, fontWeight: "800" },
+  remainingText: { color: Palette.muted, fontSize: 14, marginTop: 5 },
+  countdownBlock: { alignItems: "flex-end" },
+  countdownValue: { color: Palette.text, fontSize: 24, fontWeight: "800" },
+  countdownLabel: { color: Palette.muted, fontSize: 10, fontWeight: "700" },
+  wheelArea: { alignItems: "center", paddingBottom: 30 },
   wheel: {
     width: 214,
     height: 214,
@@ -394,8 +481,49 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     position: "relative",
   },
-  wedge: { position: "absolute", width: 80, alignItems: "center" },
-  wedgeText: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" },
+  wheelRing: {
+    position: "absolute",
+    top: 24,
+    left: 24,
+    width: 148,
+    height: 148,
+    borderRadius: 74,
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    opacity: 0.55,
+  },
+  wheelMarkTop: {
+    position: "absolute",
+    top: 14,
+    left: 94,
+    width: 8,
+    height: 26,
+    backgroundColor: "#FFFFFF",
+  },
+  wheelMarkRight: {
+    position: "absolute",
+    top: 94,
+    right: 14,
+    width: 26,
+    height: 8,
+    backgroundColor: "#FFFFFF",
+  },
+  wheelMarkBottom: {
+    position: "absolute",
+    bottom: 14,
+    left: 94,
+    width: 8,
+    height: 26,
+    backgroundColor: "#FFFFFF",
+  },
+  wheelMarkLeft: {
+    position: "absolute",
+    top: 94,
+    left: 14,
+    width: 26,
+    height: 8,
+    backgroundColor: "#FFFFFF",
+  },
   hub: {
     position: "absolute",
     top: 76,
@@ -433,6 +561,13 @@ const styles = StyleSheet.create({
     color: Palette.text,
     fontSize: 15,
     fontWeight: "600",
+  },
+  winnerRowName: {
+    flex: 1,
+    color: Palette.text,
+    fontSize: 16,
+    fontWeight: "800",
+    marginLeft: 9,
   },
   eliminatedName: {
     flex: 1,
