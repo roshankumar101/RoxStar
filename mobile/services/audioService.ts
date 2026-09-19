@@ -5,4 +5,5 @@ export const audioService = {
   stopRecording: OboeAudio.stopRecording,
   cancelRecording: OboeAudio.cancelRecording,
   setEffect: OboeAudio.setEffect,
+  getRecordingState: OboeAudio.getRecordingState,
 };

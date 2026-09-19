@@ -9,8 +9,14 @@ import {
 import { audioService } from "@/services/audioService";
 import type { Draft, DraftEffect } from "@/types/draft";
 
+type RecordingMode = "native" | "visual";
+
 type StudioState = {
   recording: boolean;
+  recordingBusy: boolean;
+  recordingCompleted: boolean;
+  recordingMode: RecordingMode;
+  recordingStartedAt: number | null;
   elapsedMs: number;
   drafts: Draft[];
   loading: boolean;
@@ -32,8 +38,15 @@ async function ensureMicrophonePermission(): Promise<boolean> {
   return result === PermissionsAndroid.RESULTS.GRANTED;
 }
 
+const recordingMode: RecordingMode =
+  audioService.getRecordingState() === "unavailable" ? "visual" : "native";
+
 export const useStudioStore = create<StudioState>((set, get) => ({
   recording: false,
+  recordingBusy: false,
+  recordingCompleted: false,
+  recordingMode,
+  recordingStartedAt: null,
   elapsedMs: 0,
   drafts: [],
   loading: false,
@@ -51,32 +64,82 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     }
   },
   start: async () => {
-    if (!(await ensureMicrophonePermission())) {
-      set({ error: "Microphone permission denied" });
-      return;
-    }
+    if (get().recording || get().recordingBusy) return;
+    set({ recordingBusy: true, error: null });
     try {
+      if (get().recordingMode === "visual") {
+        set({
+          recording: true,
+          recordingBusy: false,
+          recordingCompleted: false,
+          recordingStartedAt: Date.now(),
+          elapsedMs: 0,
+          recordingUri: null,
+        });
+        return;
+      }
+      if (!(await ensureMicrophonePermission())) {
+        set({ recordingBusy: false, error: "Microphone permission denied" });
+        return;
+      }
       await audioService.startRecording();
-      set({ recording: true, elapsedMs: 0, recordingUri: null, error: null });
+      set({
+        recording: true,
+        recordingBusy: false,
+        recordingCompleted: false,
+        recordingStartedAt: Date.now(),
+        elapsedMs: 0,
+        recordingUri: null,
+        error: null,
+      });
     } catch (error) {
       set({
+        recordingBusy: false,
         error:
           error instanceof Error ? error.message : "Unable to start recording",
       });
     }
   },
   stop: async (durationMs) => {
+    const state = get();
+    if (!state.recording || state.recordingBusy) return;
+    const measuredDuration =
+      durationMs ??
+      (state.recordingStartedAt
+        ? Date.now() - state.recordingStartedAt
+        : state.elapsedMs);
+    set({ recordingBusy: true });
+    if (state.recordingMode === "visual") {
+      set({
+        recording: false,
+        recordingBusy: false,
+        recordingCompleted: true,
+        recordingStartedAt: null,
+        elapsedMs: Math.max(measuredDuration, 0),
+        recordingUri: null,
+        error: null,
+      });
+      return;
+    }
     try {
       const recordingUri = await audioService.stopRecording();
       set({
         recording: false,
-        elapsedMs: Math.max(durationMs ?? get().elapsedMs, 1000),
+        recordingBusy: false,
+        recordingCompleted: true,
+        recordingStartedAt: null,
+        elapsedMs: Math.max(measuredDuration, 0),
         recordingUri,
         error: null,
       });
     } catch (error) {
       set({
         recording: false,
+        recordingBusy: false,
+        recordingCompleted: false,
+        recordingStartedAt: null,
+        elapsedMs: Math.max(measuredDuration, 0),
+        recordingUri: null,
         error:
           error instanceof Error ? error.message : "Unable to stop recording",
       });
@@ -84,11 +147,24 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
   cancel: async () => {
     try {
-      await audioService.cancelRecording();
-      set({ recording: false, elapsedMs: 0, recordingUri: null, error: null });
+      if (get().recordingMode === "native") {
+        await audioService.cancelRecording();
+      }
+      set({
+        recording: false,
+        recordingBusy: false,
+        recordingCompleted: false,
+        recordingStartedAt: null,
+        elapsedMs: 0,
+        recordingUri: null,
+        error: null,
+      });
     } catch (error) {
       set({
         recording: false,
+        recordingBusy: false,
+        recordingCompleted: false,
+        recordingStartedAt: null,
         elapsedMs: 0,
         recordingUri: null,
         error:
@@ -106,8 +182,12 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       set({ error: "Enter a name for this draft" });
       return false;
     }
-    if (!fileUrl) {
+    if (!get().recordingCompleted) {
       set({ error: "Record and stop audio before saving a draft" });
+      return false;
+    }
+    if (get().recordingMode === "native" && !fileUrl) {
+      set({ error: "The recorded WAV file is unavailable" });
       return false;
     }
     set({ loading: true, error: null });
@@ -116,11 +196,13 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         name: trimmedName,
         duration,
         effect,
-        fileUrl,
+        ...(fileUrl ? { fileUrl } : {}),
       });
       set((state) => ({
         drafts: [response.draft, ...state.drafts],
         loading: false,
+        recordingCompleted: false,
+        recordingStartedAt: null,
         elapsedMs: 0,
         recordingUri: null,
       }));
