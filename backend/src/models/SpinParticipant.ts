@@ -10,11 +10,12 @@ const spinParticipantSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   status: {
     type: String,
-    enum: ["ACTIVE", "ELIMINATED", "WINNER"],
+    enum: ["ACTIVE", "ELIMINATED", "WINNER", "WITHDRAWN"],
     default: "ACTIVE",
   },
   joinedAt: { type: Date, default: Date.now },
   eliminatedAt: { type: Date },
+  withdrawnAt: { type: Date },
   eliminationOrder: { type: Number },
 });
 spinParticipantSchema.index({ spinId: 1, userId: 1 }, { unique: true });

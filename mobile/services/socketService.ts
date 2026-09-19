@@ -3,7 +3,7 @@ import { API_URL } from "./apiService";
 import type { RoomState } from "@/types/room";
 
 let socket: Socket | null = null;
-let activeRoomId: string | null = null;
+const activeRooms = new Map<string, number>();
 let authenticatedToken: string | null = null;
 
 export function connectSocket(token: string): Socket {
@@ -14,7 +14,9 @@ export function connectSocket(token: string): Socket {
       auth: { token },
     });
     socket.on("connect", () => {
-      if (activeRoomId) socket?.emit("join_room", activeRoomId);
+      activeRooms.forEach((_references, roomId) => {
+        socket?.emit("join_room", roomId);
+      });
     });
   }
   if (socket.connected && authenticatedToken !== token) {
@@ -28,7 +30,7 @@ export function connectSocket(token: string): Socket {
 }
 
 export function disconnectSocket(): void {
-  activeRoomId = null;
+  activeRooms.clear();
   authenticatedToken = null;
   socket?.disconnect();
   socket?.removeAllListeners();
@@ -36,12 +38,18 @@ export function disconnectSocket(): void {
 }
 
 export function joinRoomSocket(roomId: string): void {
-  activeRoomId = roomId;
-  socket?.emit("join_room", roomId);
+  const references = activeRooms.get(roomId) ?? 0;
+  activeRooms.set(roomId, references + 1);
+  if (references === 0 && socket?.connected) socket.emit("join_room", roomId);
 }
 export function leaveRoomSocket(roomId: string): void {
-  if (activeRoomId === roomId) activeRoomId = null;
-  socket?.emit("leave_room", roomId);
+  const references = activeRooms.get(roomId) ?? 0;
+  if (references > 1) {
+    activeRooms.set(roomId, references - 1);
+    return;
+  }
+  activeRooms.delete(roomId);
+  if (references === 1) socket?.emit("leave_room", roomId);
 }
 
 export type RoomEventHandlers = {

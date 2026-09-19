@@ -1,7 +1,7 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import {
   Screen,
@@ -11,6 +11,15 @@ import {
 } from "@/components/roxstar-ui";
 import { Palette } from "@/constants/theme";
 import { useStudioStore } from "@/stores/studio";
+
+function defaultDraftName(): string {
+  const date = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date());
+  return `Recording ${date}`;
+}
 
 export default function RecordingScreen() {
   const router = useRouter();
@@ -23,6 +32,8 @@ export default function RecordingScreen() {
   const recordingUri = useStudioStore((state) => state.recordingUri);
   const error = useStudioStore((state) => state.error);
   const [elapsed, setElapsed] = useState(elapsedMs);
+  const [draftName, setDraftName] = useState(defaultDraftName);
+  const [nameError, setNameError] = useState("");
   useEffect(() => {
     if (!recording) return undefined;
     const startedAt = Date.now() - elapsedMs;
@@ -38,7 +49,13 @@ export default function RecordingScreen() {
     router.back();
   };
   const save = async () => {
-    if (await saveDraft("Voice draft", "original")) {
+    const name = draftName.trim();
+    if (!name) {
+      setNameError("Enter a name for this draft.");
+      return;
+    }
+    setNameError("");
+    if (await saveDraft(name, "original")) {
       router.back();
     }
   };
@@ -94,7 +111,24 @@ export default function RecordingScreen() {
       </View>
       <View style={styles.actions}>
         {isStopped ? (
-          <SecondaryButton label="Done" onPress={() => void save()} />
+          <>
+            <Text style={styles.inputLabel}>Draft name</Text>
+            <TextInput
+              accessibilityLabel="Draft name"
+              maxLength={160}
+              onChangeText={(value) => {
+                setDraftName(value);
+                if (nameError && value.trim()) setNameError("");
+              }}
+              onSubmitEditing={() => void save()}
+              returnKeyType="done"
+              selectTextOnFocus
+              style={[styles.input, nameError ? styles.inputError : null]}
+              value={draftName}
+            />
+            {nameError ? <Text style={styles.nameError}>{nameError}</Text> : null}
+            <SecondaryButton label="Save draft" onPress={() => void save()} />
+          </>
         ) : null}
         <View style={styles.actionRow}>
           <View style={styles.actionHalf}>
@@ -169,6 +203,19 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   actions: { gap: 10 },
+  inputLabel: { color: Palette.text, fontSize: 13, fontWeight: "700" },
+  input: {
+    minHeight: 52,
+    borderWidth: 1,
+    borderColor: Palette.border,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    color: Palette.text,
+    backgroundColor: Palette.surface,
+    fontSize: 16,
+  },
+  inputError: { borderColor: Palette.danger },
+  nameError: { color: Palette.danger, fontSize: 13 },
   actionRow: { flexDirection: "row", gap: 10 },
   actionHalf: { flex: 1 },
 });

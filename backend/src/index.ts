@@ -116,7 +116,7 @@ io.on("connection", (socket) => {
 async function start(): Promise<void> {
   await connectDatabase();
   await recoverRunningSpins(io);
-  httpServer.listen(port, () =>
+  httpServer.listen(port, "0.0.0.0", () =>
     console.log(`ROXSTAR backend listening on :${port}`),
   );
 }

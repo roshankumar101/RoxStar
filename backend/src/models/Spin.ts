@@ -11,6 +11,8 @@ const spinSchema = new Schema(
       index: true,
     },
     winnerId: { type: Schema.Types.ObjectId, ref: "User" },
+    round: { type: Number, default: 1, min: 1 },
+    nextEliminationAt: { type: Date },
     startedAt: { type: Date, default: Date.now },
     completedAt: { type: Date },
   },

@@ -184,7 +184,9 @@ export default function RoomScreen() {
         />
         <View style={styles.gap} />
         {String(state.room.ownerId) === currentUser?.id &&
-        state.room.status === "WAITING" ? (
+        state.room.status === "WAITING" &&
+        state.members.length >= 3 &&
+        state.members.length <= 20 ? (
           <>
             <PrimaryButton
               label="Start spin"

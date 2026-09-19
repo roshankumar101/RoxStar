@@ -99,15 +99,25 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     }
   },
   saveDraft: async (name, effect) => {
+    const trimmedName = name.trim();
     const duration = get().elapsedMs;
     const fileUrl = get().recordingUri;
+    if (!trimmedName) {
+      set({ error: "Enter a name for this draft" });
+      return false;
+    }
     if (!fileUrl) {
       set({ error: "Record and stop audio before saving a draft" });
       return false;
     }
     set({ loading: true, error: null });
     try {
-      const response = await createDraft({ name, duration, effect, fileUrl });
+      const response = await createDraft({
+        name: trimmedName,
+        duration,
+        effect,
+        fileUrl,
+      });
       set((state) => ({
         drafts: [response.draft, ...state.drafts],
         loading: false,

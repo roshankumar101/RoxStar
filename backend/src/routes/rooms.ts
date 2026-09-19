@@ -11,6 +11,7 @@ import { Spin } from "../models/Spin.js";
 import { SpinParticipant } from "../models/SpinParticipant.js";
 import { authUserId, requireAuth } from "../middleware/auth.js";
 import { asyncHandler } from "../middleware/errors.js";
+import { withdrawParticipantFromSpin } from "../services/spinService.js";
 
 const roomInput = z.object({ name: z.string().trim().min(1).max(120) });
 const draftInput = z.object({
@@ -110,9 +111,12 @@ export function createRoomRouter(io: Server) {
         { roomId: room._id, userId, isActive: true },
         { isActive: false, leftAt: new Date() },
       );
+      await withdrawParticipantFromSpin(room._id, userId, io);
+      const state = await roomState(room._id);
       io.to(room._id.toString()).emit("user_left", {
         userId: userId.toString(),
       });
+      if (state) io.to(room._id.toString()).emit("room_state", state);
       res.json({ ok: true });
     }),
   );
