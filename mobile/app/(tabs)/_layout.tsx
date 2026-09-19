@@ -3,6 +3,7 @@ import React from "react";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 import { HapticTab } from "@/components/haptic-tab";
+import { RoxStarHeader } from "@/components/roxstar-ui";
 import { Palette } from "@/constants/theme";
 
 export default function TabLayout() {
@@ -18,7 +19,8 @@ export default function TabLayout() {
           elevation: 0,
         },
         tabBarLabelStyle: { fontSize: 12, fontWeight: "600" },
-        headerShown: false,
+        header: () => <RoxStarHeader safeTop />,
+        headerShown: true,
         tabBarButton: (props) => <HapticTab {...(props as any)} />,
       }}
     >

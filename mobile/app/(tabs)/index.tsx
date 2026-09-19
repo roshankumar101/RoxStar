@@ -24,7 +24,7 @@ export default function HomeScreen() {
   }, [loadDrafts]);
 
   return (
-    <Screen>
+    <Screen showBrand={false}>
       <ScreenHeader title="Drafts" subtitle="Your voice ideas" />
       {loading ? <ActivityIndicator color={Palette.accent} /> : null}
       {error ? (

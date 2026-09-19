@@ -35,7 +35,7 @@ export default function ProfileScreen() {
       .slice(0, 2)
       .toUpperCase() ?? "";
   return (
-    <Screen>
+    <Screen showBrand={false}>
       <ScreenHeader title="Profile" />
       <View style={styles.profile}>
         <View style={styles.avatar}>

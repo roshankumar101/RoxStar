@@ -97,7 +97,7 @@ export default function RoomsScreen() {
     }
   };
   return (
-    <Screen>
+    <Screen showBrand={false}>
       <ScreenHeader title="Rooms" subtitle="Collaborate with others" />
       <TextInput
         value={name}

@@ -10,22 +10,45 @@ import type { Room } from "@/types/room";
 export function Screen({
   children,
   scroll = true,
+  showBrand = true,
 }: {
   children: ReactNode;
   scroll?: boolean;
+  showBrand?: boolean;
 }) {
-  const content = <View style={styles.content}>{children}</View>;
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.brandBar}>
-        <Text style={styles.brandName}>RoxStar</Text>
-      </View>
+    <SafeAreaView
+      edges={showBrand ? ["top", "right", "bottom", "left"] : ["right", "left"]}
+      style={styles.safe}
+    >
+      {showBrand ? <RoxStarHeader /> : null}
       {scroll ? (
-        <ScrollView showsVerticalScrollIndicator={false}>{content}</ScrollView>
+        <ScrollView
+          contentContainerStyle={[styles.content, styles.scrollContent]}
+          showsVerticalScrollIndicator={false}
+          style={styles.scroll}
+        >
+          {children}
+        </ScrollView>
       ) : (
-        content
+        <View style={[styles.content, styles.fixedContent]}>{children}</View>
       )}
     </SafeAreaView>
+  );
+}
+
+export function RoxStarHeader({ safeTop = false }: { safeTop?: boolean }) {
+  const header = (
+    <View style={styles.brandBar}>
+      <Text style={styles.brandName}>RoxStar</Text>
+    </View>
+  );
+  return safeTop ? (
+    <SafeAreaView edges={["top"]} style={styles.headerSafe}>
+      {header}
+    </SafeAreaView>
+  ) : (
+    header
   );
 }
 
@@ -233,6 +256,7 @@ export function formatDate(date: string) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Palette.background },
+  headerSafe: { backgroundColor: Palette.background },
   brandBar: {
     minHeight: 54,
     paddingHorizontal: 24,
@@ -246,7 +270,10 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.2,
   },
+  scroll: { flex: 1 },
   content: { padding: 24, paddingBottom: 36 },
+  scrollContent: { flexGrow: 1 },
+  fixedContent: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
