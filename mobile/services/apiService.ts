@@ -1,10 +1,5 @@
-import { Platform } from "react-native";
+import { API_BASE_URL } from "@/constants/network";
 
-const API_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
-  (Platform.OS === "android"
-    ? "http://10.0.2.2:3000/api"
-    : "http://localhost:3000/api");
 let accessToken: string | null = null;
 
 export function setAccessToken(token: string | null): void {
@@ -21,7 +16,7 @@ export async function apiRequest<T>(
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "application/json");
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers,
     credentials: "include",
@@ -35,5 +30,3 @@ export async function apiRequest<T>(
     );
   return payload;
 }
-
-export { API_URL };

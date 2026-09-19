@@ -1,5 +1,5 @@
 import { io, type Socket } from "socket.io-client";
-import { API_URL } from "./apiService";
+import { SOCKET_URL } from "@/constants/network";
 import type { RoomState } from "@/types/room";
 
 let socket: Socket | null = null;
@@ -8,7 +8,7 @@ let authenticatedToken: string | null = null;
 
 export function connectSocket(token: string): Socket {
   if (!socket) {
-    socket = io(API_URL.replace(/\/api$/, ""), {
+    socket = io(SOCKET_URL, {
       autoConnect: false,
       reconnection: true,
       auth: { token },
